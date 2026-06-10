@@ -1,12 +1,9 @@
 name: Release
 
-# Publish a GitHub release whenever the manifest version on main is new.
-# HACS shows a version from GitHub *releases* (a bare tag is not enough); the
-# release also creates its underlying tag, so no tags are managed by hand.
-
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,20 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Publish release when the manifest version is new
+      - name: Read version from manifest
+        id: ver
+        run: echo "version=$(jq -r '.version' custom_components/dohome_rgb/manifest.json)" >> "$GITHUB_OUTPUT"
+      - name: Create release if it does not exist
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version="$(jq -r .version custom_components/dohome_rgb/manifest.json)"
-          tag="v${version}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $tag already exists — nothing to do."
+          TAG="v${{ steps.ver.outputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — skipping."
           else
-            gh release create "$tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "$tag" \
-              --notes "Release $version"
-            echo "Published release $tag"
+            gh release create "$TAG" --title "$TAG" --generate-notes --target "$GITHUB_SHA"
           fi
