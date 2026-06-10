@@ -1,20 +1,34 @@
 """DoHome Home Assistant integration"""
 
 from dataclasses import dataclass
+from datetime import timedelta
+from logging import getLogger
 
 import homeassistant.helpers.config_validation as cv
 from dohome.api import APIClient
 from dohome.transport import TCPStream
 from dohome.types.device import DeviceInfo as APIDeviceInfo
 from dohome.types.device import parse_doit_device_info
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import discovery_flow
+from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.typing import ConfigType
 
-from .constants import CONF_HOST, CONF_INFO, DOMAIN
+from .constants import CONF_HOST, CONF_INFO, CONF_NAME, CONF_UNIQUE_ID, DOMAIN
+from .discovery import async_discover_devices
+
+_LOGGER = getLogger(__name__)
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 PLATFORMS = [Platform.LIGHT]
+
+# How often the network is re-scanned for not-yet-configured devices. A scan is
+# cheap: a few tiny UDP broadcast packets and ~3s mostly spent awaiting replies,
+# with all sockets closed afterwards — so a 1-minute cadence is safe.
+DISCOVERY_INTERVAL = timedelta(minutes=1)
+_DISCOVERY_STARTED = f"{DOMAIN}_discovery_started"
 
 
 @dataclass
@@ -29,6 +43,44 @@ class DoHomeRuntimeData:
 # and removes the need for the global `hass.data[DOMAIN]` bookkeeping. This is
 # the modern Home Assistant storage pattern (recommended since 2024.x).
 type DoHomeConfigEntry = ConfigEntry[DoHomeRuntimeData]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up periodic background discovery of DoHome devices.
+
+    `async_setup` runs whenever the integration is loaded (i.e. once at least
+    one config entry exists), so the very first device is added through the
+    config flow's scan/manual step; afterwards new bulbs surface here as
+    "discovered device" cards in Settings -> Devices & Services.
+    """
+    # Guard against the unlikely double setup so we register a single timer.
+    if hass.data.get(_DISCOVERY_STARTED):
+        return True
+    hass.data[_DISCOVERY_STARTED] = True
+
+    async def _async_discover(_now=None) -> None:
+        try:
+            devices = await async_discover_devices()
+        except Exception:  # noqa: BLE001 - discovery must never break HA
+            _LOGGER.exception("DoHome discovery failed")
+            return
+        for device in devices.values():
+            # Each call starts a discovery flow; HA dedupes by unique id, so
+            # already-configured or already-pending devices are ignored.
+            discovery_flow.async_create_flow(
+                hass,
+                DOMAIN,
+                context={"source": SOURCE_INTEGRATION_DISCOVERY},
+                data={
+                    CONF_HOST: device.host,
+                    CONF_UNIQUE_ID: device.unique_id,
+                    CONF_NAME: device.name,
+                },
+            )
+
+    _ = async_track_time_interval(hass, _async_discover, DISCOVERY_INTERVAL)
+    _ = hass.async_create_background_task(_async_discover(), f"{DOMAIN}_discovery")
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
