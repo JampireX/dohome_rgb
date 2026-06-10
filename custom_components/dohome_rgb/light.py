@@ -2,54 +2,41 @@
 
 import asyncio
 from datetime import timedelta
-from typing import Any, Callable, override
+from typing import Any, override
 
-import voluptuous as vol
 from dohome.api import APIClient
 from dohome.exc.base import DoHomeException
-from dohome.transport import TCPStream
 from dohome.types.constants import KELVIN_MAX, KELVIN_MIN
 from dohome.types.device import DeviceInfo as APIDeviceInfo
 from dohome.types.device import DeviceType, encode_device_id
 from dohome.types.light import LightMode
-from homeassistant import config_entries, core
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP_KELVIN,
     ATTR_RGB_COLOR,
-    PLATFORM_SCHEMA,
+    ColorMode,
     LightEntity,
 )
-from homeassistant.components.light.const import ColorMode
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .constants import CONF_HOST, CONF_INFO, DOMAIN
+from . import DoHomeConfigEntry
+from .constants import DOMAIN
 
 SCAN_INTERVAL = timedelta(seconds=10)
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {vol.Required(CONF_INFO): dict, vol.Required(CONF_HOST): str}
-)
-
 
 async def async_setup_entry(
-    hass: core.HomeAssistant,
-    config_entry: config_entries.ConfigEntry,
-    async_add_entities: Callable[[list[LightEntity]], None],
+    hass: HomeAssistant,
+    config_entry: DoHomeConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up desk light."""
-    data = hass.data[DOMAIN][config_entry.entry_id]
-    stream = TCPStream(data[CONF_HOST])
-    client = APIClient(stream)
-
-    async_add_entities(
-        [
-            DoHomeLightEntity(
-                client,
-                data[CONF_INFO],
-            )
-        ]
-    )
+    """Set up the light from a config entry."""
+    # Client and parsed device info are created once in __init__ and shared
+    # via runtime_data, so the platform no longer rebuilds the TCP client.
+    data = config_entry.runtime_data
+    async_add_entities([DoHomeLightEntity(data.client, data.info)])
 
 
 class DoHomeLightEntity(LightEntity):
@@ -94,6 +81,9 @@ class DoHomeLightEntity(LightEntity):
         if not state["is_on"]:
             return
 
+        # The device only reports a lossy state (in RGB mode brightness is
+        # always 255 and temperature 0), so trust the hardware once to seed
+        # the initial values and keep them locally afterwards.
         if not self._state_known:
             if state["mode"] == LightMode.WHITE:
                 self._attr_color_mode = ColorMode.COLOR_TEMP
