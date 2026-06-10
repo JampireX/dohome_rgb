@@ -68,12 +68,13 @@ coupled through `entry.runtime_data` and the `dohome-api` types.
 - **`light.py`** — `DoHomeLightEntity(LightEntity)`, the only entity. Supports two color
   modes (`RGB` and `COLOR_TEMP`); the Kelvin range comes from `dohome-api` constants
   (`KELVIN_MIN`/`KELVIN_MAX`). Device commands map to `client.set_power / set_white /
-  set_color`.
+  set_color`. It also exposes the 27 built-in hardware effects (`LightEntityFeature.EFFECT`)
+  via the module-level `EFFECTS` label→`Effect` map and `client.set_effect`.
   - **State model is optimistic.** The `_state_known` flag means the device's real state is
     read from the bulb only once (first successful poll or first explicit `turn_on`), after
-    which Home Assistant tracks brightness/color/mode **locally** and stops overwriting them
-    from polls. Be careful changing this — it is intentional, not a bug, because the hardware
-    does not reliably report color state.
+    which Home Assistant tracks brightness/color/mode/effect **locally** and stops overwriting
+    them from polls. Be careful changing this — it is intentional, not a bug, because the
+    hardware does not reliably report color state and never reports the active effect.
   - All `dohome-api` calls are wrapped to catch `(asyncio.TimeoutError, DoHomeException,
     OSError)` and flip `_attr_available = False` for connection resilience.
 

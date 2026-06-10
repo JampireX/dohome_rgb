@@ -6,16 +6,18 @@ from typing import Any, override
 
 from dohome.api import APIClient
 from dohome.exc.base import DoHomeException
-from dohome.types.constants import KELVIN_MAX, KELVIN_MIN
+from dohome.types.constants import Effect, KELVIN_MAX, KELVIN_MIN
 from dohome.types.device import DeviceInfo as APIDeviceInfo
 from dohome.types.device import DeviceType, encode_device_id
 from dohome.types.light import LightMode
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP_KELVIN,
+    ATTR_EFFECT,
     ATTR_RGB_COLOR,
     ColorMode,
     LightEntity,
+    LightEntityFeature,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -25,6 +27,21 @@ from . import DoHomeConfigEntry
 from .constants import DOMAIN
 
 SCAN_INTERVAL = timedelta(seconds=10)
+
+# Built-in hardware effects exposed as Home Assistant light effects. The device
+# cannot report which effect is running, so the selection is tracked locally.
+_COLOR_TOKENS = frozenset({"RG", "RB", "GB", "RGB"})
+
+
+def _effect_name(name: str) -> str:
+    """Turn an Effect enum name (RGB_STROBE) into a label (RGB Strobe)."""
+    return " ".join(
+        word if word in _COLOR_TOKENS else word.capitalize()
+        for word in name.split("_")
+    )
+
+
+EFFECTS: dict[str, Effect] = {_effect_name(effect.name): effect for effect in Effect}
 
 
 async def async_setup_entry(
@@ -43,6 +60,8 @@ class DoHomeLightEntity(LightEntity):
     """DoHome light entity"""
 
     _attr_supported_color_modes = {ColorMode.RGB, ColorMode.COLOR_TEMP}
+    _attr_supported_features = LightEntityFeature.EFFECT
+    _attr_effect_list = list(EFFECTS)
     _attr_min_color_temp_kelvin = KELVIN_MIN
     _attr_max_color_temp_kelvin = KELVIN_MAX
 
@@ -103,6 +122,18 @@ class DoHomeLightEntity(LightEntity):
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the light on."""
+        if ATTR_EFFECT in kwargs:
+            effect = kwargs[ATTR_EFFECT]
+            try:
+                await self._client.set_effect(EFFECTS[effect])
+            except (asyncio.TimeoutError, DoHomeException, OSError):
+                self._attr_available = False
+                return
+            self._state_known = True
+            self._attr_effect = effect
+            self._attr_is_on = True
+            return
+
         has_explicit_state = (
             ATTR_BRIGHTNESS in kwargs
             or ATTR_RGB_COLOR in kwargs
@@ -111,6 +142,8 @@ class DoHomeLightEntity(LightEntity):
 
         if has_explicit_state:
             self._state_known = True
+            # A manual colour/brightness change exits effect mode.
+            self._attr_effect = None
             if ATTR_BRIGHTNESS in kwargs:
                 self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
             if ATTR_RGB_COLOR in kwargs:
