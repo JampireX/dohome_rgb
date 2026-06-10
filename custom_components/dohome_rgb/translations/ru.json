@@ -34,6 +34,7 @@
       "no_devices_found": "Устройства DoHome в сети не найдены"
     },
     "abort": {
+      "added_devices": "Добавлено устройств: {count}",
       "already_configured": "Устройство уже настроено",
       "cannot_connect": "Не удалось подключиться к устройству",
       "reconfigure_successful": "Адрес устройства успешно обновлён",

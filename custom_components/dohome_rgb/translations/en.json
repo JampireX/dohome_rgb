@@ -34,6 +34,7 @@
       "no_devices_found": "No DoHome devices were found on the network"
     },
     "abort": {
+      "added_devices": "Added {count} device(s)",
       "already_configured": "Device is already configured",
       "cannot_connect": "Cannot connect to device",
       "reconfigure_successful": "Device address updated successfully",

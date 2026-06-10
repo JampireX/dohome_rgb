@@ -18,7 +18,7 @@ from homeassistant.config_entries import (
     ConfigFlow,
     ConfigFlowResult,
 )
-from homeassistant.helpers import discovery_flow
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers.typing import DiscoveryInfoType
 
 from .constants import (
@@ -117,19 +117,15 @@ class DoHomeConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             selected = user_input[CONF_DEVICES]
             if selected:
-                first = self._discovered[selected[0]]
-                try:
-                    unique_id, info = await self._async_read_device(first.host)
-                except _CONNECT_ERRORS:
-                    return self.async_abort(reason="cannot_connect")
-                _ = await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
-                # A flow can only create one entry, so the remaining picks are
-                # added through auto-confirmed discovery flows.
-                for uid in selected[1:]:
+                # A config flow can only create one entry, so each picked device
+                # is added through its own auto-confirmed sub-flow. They are
+                # awaited sequentially and started with flow.async_init directly
+                # (not discovery_flow.async_create_flow, which deduplicates
+                # matching discovery flows and would drop all but the first).
+                added = 0
+                for uid in selected:
                     device = self._discovered[uid]
-                    discovery_flow.async_create_flow(
-                        self.hass,
+                    result = await self.hass.config_entries.flow.async_init(
                         DOMAIN,
                         context={"source": SOURCE_INTEGRATION_DISCOVERY},
                         data={
@@ -139,9 +135,11 @@ class DoHomeConfigFlow(ConfigFlow, domain=DOMAIN):
                             _CONF_CONFIRMED: True,
                         },
                     )
-                return self.async_create_entry(
-                    title=first.name,
-                    data={CONF_HOST: first.host, CONF_INFO: info},
+                    if result.get("type") == FlowResultType.CREATE_ENTRY:
+                        added += 1
+                return self.async_abort(
+                    reason="added_devices",
+                    description_placeholders={"count": str(added)},
                 )
 
         options = {
@@ -183,9 +181,11 @@ class DoHomeConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="discovery_confirm",
             data_schema=vol.Schema({}),
+            # Keys must match the {name}/{host} placeholders in the translation
+            # strings (note: CONF_HOST == "hostname", not "host").
             description_placeholders={
-                CONF_NAME: self._discovery.name,
-                CONF_HOST: self._discovery.host,
+                "name": self._discovery.name,
+                "host": self._discovery.host,
             },
         )
 
