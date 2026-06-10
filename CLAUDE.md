@@ -1,0 +1,80 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+A Home Assistant **custom integration** (distributed via HACS / hapm) that controls DoHome
+RGB bulbs and strips over the **local network via TCP**. All device protocol logic lives in
+the external `dohome-api` package (pinned `==2.2.1`); this repo only adapts that library to
+Home Assistant's config-entry + entity model. The integration exposes a single platform:
+`light`.
+
+Domain: `dohome_rgb`. All code is under `custom_components/dohome_rgb/`.
+
+## Commands
+
+Dependencies are managed with **uv** from `pyproject.toml` only — there is **no committed
+`uv.lock`**, so `uv sync` resolves the latest versions allowed by the constraints. The
+`Makefile` targets use Unix `rm -rf`, so on Windows run the underlying `uv` commands directly:
+
+| Task | Make target | Direct command |
+| --- | --- | --- |
+| Create/refresh venv | `make configure` | `uv venv --python 3.14` then `uv sync` |
+| Type check | `make typecheck` | `uv run basedpyright custom_components/` |
+
+There is **no test suite** and **no linter** — do not invent commands for either. ruff and
+pylint were removed; `basedpyright` (configured in `pyproject.toml` under `[tool.basedpyright]`)
+is the only static-analysis step. CI (`.github/workflows/qa.yaml`) runs the type check and
+validates the manifest with Home Assistant's `hassfest` action.
+
+## Architecture
+
+Read these four files together to understand the flow; each is small but they are tightly
+coupled through `entry.runtime_data` and the `dohome-api` types.
+
+- **`__init__.py`** — config-entry lifecycle. Defines the `DoHomeRuntimeData` dataclass
+  (`client` + parsed `info`) and the typed `DoHomeConfigEntry = ConfigEntry[DoHomeRuntimeData]`.
+  `async_setup_entry` builds the `APIClient` once (the `TCPStream` constructor does no I/O)
+  and stores it on `entry.runtime_data`, then forwards to the `light` platform; unload just
+  unloads the platform (no `hass.data` cleanup). `async_migrate_entry` upgrades **v1 → v2**
+  entries by re-parsing the stored raw device info through `parse_doit_device_info`. The
+  config-entry `VERSION` is **2** (set in `config_flow.py`); bump both the flow version and
+  add a migration branch when the stored data shape changes.
+
+- **`config_flow.py`** — UI setup only (no YAML import). `async_step_user` takes a hostname/IP,
+  opens a `TCPStream` + `APIClient`, calls `get_device_info()`, and derives the `unique_id`
+  from `encode_device_id(info["hardware"])` to deduplicate devices. `async_step_reconfigure`
+  lets the user change the host of an existing entry: it verifies the new address answers as
+  the **same** `unique_id`, then writes the host into `entry.data` (the source `async_setup_entry`
+  reads) and reloads. This replaced the old `OptionsFlow`, which wrote the host to
+  `entry.options` and was therefore silently ignored.
+
+- **`light.py`** — `DoHomeLightEntity(LightEntity)`, the only entity. Supports two color
+  modes (`RGB` and `COLOR_TEMP`); the Kelvin range comes from `dohome-api` constants
+  (`KELVIN_MIN`/`KELVIN_MAX`). Device commands map to `client.set_power / set_white /
+  set_color`.
+  - **State model is optimistic.** The `_state_known` flag means the device's real state is
+    read from the bulb only once (first successful poll or first explicit `turn_on`), after
+    which Home Assistant tracks brightness/color/mode **locally** and stops overwriting them
+    from polls. Be careful changing this — it is intentional, not a bug, because the hardware
+    does not reliably report color state.
+  - All `dohome-api` calls are wrapped to catch `(asyncio.TimeoutError, DoHomeException,
+    OSError)` and flip `_attr_available = False` for connection resilience.
+
+- **`constants.py`** — `DOMAIN` and the `CONF_*` keys used as config-entry data keys.
+
+### Cross-cutting notes
+
+- The integration is **polling** (`light.py` sets `SCAN_INTERVAL = 10s` with the default
+  `should_poll`); `manifest.json` declares `iot_class: local_polling` to match. `dohome-api`
+  has no push/subscribe mechanism — each request opens a fresh TCP connection.
+- The `dohome-api` version is pinned identically in **both** `pyproject.toml` and
+  `manifest.json` `requirements`; update both together.
+- `homeassistant` is floored at the latest release (`>=2026.6.2`) in `pyproject.toml`; the
+  Python requirement is `>=3.14` because HA 2026.6 needs Python 3.14.2. No `uv.lock` is kept,
+  so re-running `uv sync` always pulls the newest matching versions.
+- User-facing strings live **only** in `translations/en.json` + `translations/ru.json` (the
+  runtime source for a custom component). There is intentionally no `strings.json`; note that
+  `hassfest` CI normally expects one, so that check may warn.
+- Bump `manifest.json` `version` for releases (HACS reads it).
