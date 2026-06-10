@@ -15,18 +15,18 @@ Domain: `dohome_rgb`. All code is under `custom_components/dohome_rgb/`.
 ## Commands
 
 Dependencies are managed with **uv** from `pyproject.toml` only — there is **no committed
-`uv.lock`**, so `uv sync` resolves the latest versions allowed by the constraints. The
-`Makefile` targets use Unix `rm -rf`, so on Windows run the underlying `uv` commands directly:
+`uv.lock`**, so `uv sync` resolves the latest versions allowed by the constraints. There is no
+Makefile; run `uv` directly:
 
-| Task | Make target | Direct command |
-| --- | --- | --- |
-| Create/refresh venv | `make configure` | `uv venv --python 3.14` then `uv sync` |
-| Type check | `make typecheck` | `uv run basedpyright custom_components/` |
+| Task | Command |
+| --- | --- |
+| Create/refresh venv | `uv venv --python 3.14` then `uv sync` |
+| Type check | `uv run basedpyright custom_components/` |
 
 There is **no test suite** and **no linter** — do not invent commands for either. ruff and
 pylint were removed; `basedpyright` (configured in `pyproject.toml` under `[tool.basedpyright]`)
-is the only static-analysis step. CI (`.github/workflows/qa.yaml`) runs the type check and
-validates the manifest with Home Assistant's `hassfest` action.
+is the only static-analysis step. CI runs `.github/workflows/validate.yml` (HACS + hassfest)
+and `.github/workflows/release.yml` (publishes a release when `manifest.json` `version` bumps).
 
 ## Architecture
 
