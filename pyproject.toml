@@ -5,7 +5,7 @@ authors = [
 ]
 description = "DoHome lights Home Assistant integration"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 keywords = ["home-assistant", "dohome"]
 license = {text = "MIT"}
 classifiers = [
@@ -13,31 +13,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License"
 ]
 dependencies = [
-    "homeassistant",
-    "pylint==4.0.5",
-    "ruff==0.15.6",
+    "homeassistant>=2026.6.2",
     "dohome-api==2.2.1",
-    "basedpyright>=1.38.3",
+    "basedpyright>=1.39.7",
 ]
 version = "v0.0.0"
-
-[tool.ruff]
-lint.ignore = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "C",  # flake8-comprehensions
-    "B",  # flake8-bugbear
-]
-lint.select = [
-    "E501",  # line too long, handled by black
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex
-]
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
 
 [tool.basedpyright]
 venvPath = "."

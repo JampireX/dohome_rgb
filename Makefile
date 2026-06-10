@@ -1,5 +1,5 @@
 VENV_PATH = ./.venv
-PYTHON_VERSION = 3.13
+PYTHON_VERSION = 3.14
 
 .PHONY: configure
 configure:
@@ -9,11 +9,6 @@ configure:
 
 clean:
 	rm -rf venv
-
-.PHONY: check
-lint:
-	uv run ruff check custom_components/
-	uv run pylint custom_components/
 
 .PHONY: typecheck
 typecheck:
