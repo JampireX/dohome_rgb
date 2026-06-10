@@ -1,10 +1,26 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
+        "description": "Enter the device IP/hostname, or leave it empty to scan the local network for DoHome devices.",
         "data": {
           "hostname": "Device hostname or IP address"
+        },
+        "data_description": {
+          "hostname": "Leave empty to search the network automatically."
         }
+      },
+      "pick": {
+        "title": "Discovered DoHome devices",
+        "description": "Select the devices you want to add.",
+        "data": {
+          "devices": "Devices"
+        }
+      },
+      "discovery_confirm": {
+        "title": "DoHome device found",
+        "description": "Do you want to add {name} ({host})?"
       },
       "reconfigure": {
         "description": "Update the network address of this DoHome device.",
@@ -14,10 +30,12 @@
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to device"
+      "cannot_connect": "Cannot connect to device",
+      "no_devices_found": "No DoHome devices were found on the network"
     },
     "abort": {
       "already_configured": "Device is already configured",
+      "cannot_connect": "Cannot connect to device",
       "reconfigure_successful": "Device address updated successfully",
       "wrong_device": "This address belongs to a different device"
     }
