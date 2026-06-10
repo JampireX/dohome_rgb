@@ -1,12 +1,12 @@
 {
   "domain": "dohome_rgb",
-  "name": "DoHome RGB lights",
-  "codeowners": ["@mishamyrt"],
+  "name": "DoHome",
+  "codeowners": ["@JampireX"],
   "config_flow": true,
-  "documentation": "https://github.com/mishamyrt/dohome_rgb",
+  "documentation": "https://github.com/JampireX/dohome_rgb",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/mishamyrt/dohome_rgb/issues",
+  "issue_tracker": "https://github.com/JampireX/dohome_rgb/issues",
   "requirements": ["dohome-api==2.2.1"],
-  "version": "1.2.0"
+  "version": "1.3.0"
 }
