@@ -40,15 +40,30 @@ coupled through `entry.runtime_data` and the `dohome-api` types.
   unloads the platform (no `hass.data` cleanup). `async_migrate_entry` upgrades **v1 → v2**
   entries by re-parsing the stored raw device info through `parse_doit_device_info`. The
   config-entry `VERSION` is **2** (set in `config_flow.py`); bump both the flow version and
-  add a migration branch when the stored data shape changes.
+  add a migration branch when the stored data shape changes. `async_setup` (component-level)
+  starts a **1-minute background discovery** loop (`async_track_time_interval`) that scans the
+  LAN and opens an `integration_discovery` flow per found device — these appear as
+  "discovered device" cards. Note: `async_setup` only runs once the integration is loaded
+  (i.e. after the first entry exists), so the very first device is added via the config flow.
 
-- **`config_flow.py`** — UI setup only (no YAML import). `async_step_user` takes a hostname/IP,
-  opens a `TCPStream` + `APIClient`, calls `get_device_info()`, and derives the `unique_id`
-  from `encode_device_id(info["hardware"])` to deduplicate devices. `async_step_reconfigure`
-  lets the user change the host of an existing entry: it verifies the new address answers as
-  the **same** `unique_id`, then writes the host into `entry.data` (the source `async_setup_entry`
-  reads) and reloads. This replaced the old `OptionsFlow`, which wrote the host to
-  `entry.options` and was therefore silently ignored.
+- **`config_flow.py`** — UI setup only (no YAML import). `async_step_user` has a single
+  **optional** host field: if filled, the device is added directly (probe via `_async_read_device`
+  → `unique_id` from `encode_device_id`); if left empty, it scans the LAN (`async_step_pick`,
+  a `cv.multi_select` of unconfigured devices). Selected devices are added one per config entry
+  — the first inline, the rest via auto-confirmed `integration_discovery` flows. Background-
+  discovered devices land in `async_step_integration_discovery` → `async_step_discovery_confirm`
+  (the confirmation card), and `_abort_if_unique_id_configured(updates=...)` refreshes a
+  device's IP if it changed. `async_step_reconfigure` changes the host of an existing entry
+  (verifies the **same** `unique_id`, writes `entry.data`, reloads); it replaced the old
+  `OptionsFlow`, which wrote to `entry.options` and was silently ignored.
+
+- **`discovery.py`** — tolerant LAN discovery over UDP broadcast (port 6091, PING/PONG
+  datagrams), returning `DiscoveredDevice`s keyed by `unique_id`. It does **not** use
+  `dohome-api`'s `discover()`: that helper validates responses against a misspelled
+  `compandy_id` key while real devices send `company_id`, so it raises on every reply.
+  `sta_ip` (not `host_ip`) is the device's routable LAN address. Broadcasts to every local
+  /24 plus `255.255.255.255` because the library's `get_discovery_host()` returns `""` on
+  multi-homed hosts.
 
 - **`light.py`** — `DoHomeLightEntity(LightEntity)`, the only entity. Supports two color
   modes (`RGB` and `COLOR_TEMP`); the Kelvin range comes from `dohome-api` constants
