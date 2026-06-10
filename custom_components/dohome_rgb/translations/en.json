@@ -1,15 +1,25 @@
 {
   "config": {
-    "error": {
-      "cannot_connect": "Cannot connect to device",
-      "cannot_read_device_info": "Cannot read device info"
-    },
     "step": {
       "user": {
         "data": {
           "hostname": "Device hostname or IP address"
         }
+      },
+      "reconfigure": {
+        "description": "Update the network address of this DoHome device.",
+        "data": {
+          "hostname": "Device hostname or IP address"
+        }
       }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to device"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "reconfigure_successful": "Device address updated successfully",
+      "wrong_device": "This address belongs to a different device"
     }
   }
 }
