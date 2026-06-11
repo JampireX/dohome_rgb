@@ -83,7 +83,10 @@ class DoHomeLightEntity(LightEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, unique_id)},
             manufacturer="DoHome",
-            model=device_type.name,
+            # The device reports its real model code as the type value
+            # (e.g. "DT-WYRGB"); prefer it over the generic enum name
+            # ("RGBW_BULB").
+            model=device_type.value,
             sw_version=info["version"],
             hw_version=hw_info["chip"],
             serial_number=hw_info["sid"],
