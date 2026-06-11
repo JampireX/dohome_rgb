@@ -1,0 +1,44 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Inserisci l'indirizzo IP/il nome host del dispositivo oppure lascia vuoto per cercare dispositivi DoHome nella rete locale.",
+        "data": {
+          "hostname": "Nome host o indirizzo IP del dispositivo"
+        },
+        "data_description": {
+          "hostname": "Lascia vuoto per cercare automaticamente nella rete."
+        }
+      },
+      "pick": {
+        "title": "Dispositivi DoHome rilevati",
+        "description": "Seleziona i dispositivi che vuoi aggiungere.",
+        "data": {
+          "devices": "Dispositivi"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Dispositivo DoHome trovato",
+        "description": "Vuoi aggiungere {name} ({host})?"
+      },
+      "reconfigure": {
+        "description": "Aggiorna l'indirizzo di rete di questo dispositivo DoHome.",
+        "data": {
+          "hostname": "Nome host o indirizzo IP del dispositivo"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi al dispositivo",
+      "no_devices_found": "Nessun dispositivo DoHome trovato nella rete"
+    },
+    "abort": {
+      "added_devices": "Aggiunti {count} dispositivo/i",
+      "already_configured": "Il dispositivo è già configurato",
+      "cannot_connect": "Impossibile connettersi al dispositivo",
+      "reconfigure_successful": "Indirizzo del dispositivo aggiornato correttamente",
+      "wrong_device": "Questo indirizzo appartiene a un altro dispositivo"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Geben Sie die IP-Adresse/den Hostnamen des Geräts ein oder lassen Sie das Feld leer, um das lokale Netzwerk nach DoHome-Geräten zu durchsuchen.",
+        "data": {
+          "hostname": "Hostname oder IP-Adresse des Geräts"
+        },
+        "data_description": {
+          "hostname": "Leer lassen, um das Netzwerk automatisch zu durchsuchen."
+        }
+      },
+      "pick": {
+        "title": "Gefundene DoHome-Geräte",
+        "description": "Wählen Sie die Geräte aus, die Sie hinzufügen möchten.",
+        "data": {
+          "devices": "Geräte"
+        }
+      },
+      "discovery_confirm": {
+        "title": "DoHome-Gerät gefunden",
+        "description": "Möchten Sie {name} ({host}) hinzufügen?"
+      },
+      "reconfigure": {
+        "description": "Aktualisieren Sie die Netzwerkadresse dieses DoHome-Geräts.",
+        "data": {
+          "hostname": "Hostname oder IP-Adresse des Geräts"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Gerät nicht möglich",
+      "no_devices_found": "Es wurden keine DoHome-Geräte im Netzwerk gefunden"
+    },
+    "abort": {
+      "added_devices": "{count} Gerät(e) hinzugefügt",
+      "already_configured": "Gerät ist bereits konfiguriert",
+      "cannot_connect": "Verbindung zum Gerät nicht möglich",
+      "reconfigure_successful": "Geräteadresse erfolgreich aktualisiert",
+      "wrong_device": "Diese Adresse gehört zu einem anderen Gerät"
+    }
+  }
+}

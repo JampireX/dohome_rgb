@@ -1,0 +1,44 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Saisissez l'adresse IP/le nom d'hôte de l'appareil, ou laissez le champ vide pour rechercher des appareils DoHome sur le réseau local.",
+        "data": {
+          "hostname": "Nom d'hôte ou adresse IP de l'appareil"
+        },
+        "data_description": {
+          "hostname": "Laissez vide pour rechercher automatiquement sur le réseau."
+        }
+      },
+      "pick": {
+        "title": "Appareils DoHome détectés",
+        "description": "Sélectionnez les appareils que vous souhaitez ajouter.",
+        "data": {
+          "devices": "Appareils"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Appareil DoHome détecté",
+        "description": "Voulez-vous ajouter {name} ({host}) ?"
+      },
+      "reconfigure": {
+        "description": "Mettez à jour l'adresse réseau de cet appareil DoHome.",
+        "data": {
+          "hostname": "Nom d'hôte ou adresse IP de l'appareil"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter à l'appareil",
+      "no_devices_found": "Aucun appareil DoHome n'a été trouvé sur le réseau"
+    },
+    "abort": {
+      "added_devices": "{count} appareil(s) ajouté(s)",
+      "already_configured": "L'appareil est déjà configuré",
+      "cannot_connect": "Impossible de se connecter à l'appareil",
+      "reconfigure_successful": "Adresse de l'appareil mise à jour avec succès",
+      "wrong_device": "Cette adresse appartient à un autre appareil"
+    }
+  }
+}
