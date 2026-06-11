@@ -1,0 +1,4 @@
+# Keep CI/workflow config out of release source archives.
+# GitHub's release "Source code" zip/tar.gz are produced with `git archive`,
+# which honors `export-ignore`, so .github is excluded from them.
+/.github export-ignore
