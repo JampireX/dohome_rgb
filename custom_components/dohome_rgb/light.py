@@ -43,6 +43,11 @@ def _effect_name(name: str) -> str:
 
 EFFECTS: dict[str, Effect] = {_effect_name(effect.name): effect for effect in Effect}
 
+# Synthetic "no effect" entry shown first in the effect list: selecting it stops
+# a running hardware effect by re-applying the current static colour/temperature.
+EFFECT_OFF = "None"
+_EFFECT_LIST = [EFFECT_OFF, *EFFECTS]
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -61,7 +66,8 @@ class DoHomeLightEntity(LightEntity):
 
     _attr_supported_color_modes = {ColorMode.RGB, ColorMode.COLOR_TEMP}
     _attr_supported_features = LightEntityFeature.EFFECT
-    _attr_effect_list = list(EFFECTS)
+    _attr_effect_list = _EFFECT_LIST
+    _attr_effect = EFFECT_OFF
     _attr_min_color_temp_kelvin = KELVIN_MIN
     _attr_max_color_temp_kelvin = KELVIN_MAX
 
@@ -128,7 +134,11 @@ class DoHomeLightEntity(LightEntity):
         if ATTR_EFFECT in kwargs:
             effect = kwargs[ATTR_EFFECT]
             try:
-                await self._client.set_effect(EFFECTS[effect])
+                if effect == EFFECT_OFF:
+                    # Stop the running effect by re-applying a static state.
+                    await self._async_apply_color()
+                else:
+                    await self._client.set_effect(EFFECTS[effect])
             except (asyncio.TimeoutError, DoHomeException, OSError):
                 self._attr_available = False
                 return
@@ -146,7 +156,7 @@ class DoHomeLightEntity(LightEntity):
         if has_explicit_state:
             self._state_known = True
             # A manual colour/brightness change exits effect mode.
-            self._attr_effect = None
+            self._attr_effect = EFFECT_OFF
             if ATTR_BRIGHTNESS in kwargs:
                 self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
             if ATTR_RGB_COLOR in kwargs:
@@ -159,18 +169,26 @@ class DoHomeLightEntity(LightEntity):
         try:
             if not self._state_known:
                 await self._client.set_power(True)
-            elif self._attr_color_mode == ColorMode.COLOR_TEMP:
-                temp = self._attr_color_temp_kelvin or KELVIN_MIN
-                brightness = self._attr_brightness or 255
-                await self._client.set_white(temp, brightness)
             else:
-                color = self._attr_rgb_color or (255, 255, 255)
-                brightness = self._attr_brightness or 255
-                await self._client.set_color(color, brightness)
+                await self._async_apply_color()
         except (asyncio.TimeoutError, DoHomeException, OSError):
             self._attr_available = False
             return
         self._attr_is_on = True
+
+    async def _async_apply_color(self) -> None:
+        """Send the current static colour/temperature to the device.
+
+        Also used to stop a running hardware effect (the effect ends as soon as
+        a normal state is written).
+        """
+        brightness = self._attr_brightness or 255
+        if self._attr_color_mode == ColorMode.COLOR_TEMP:
+            temp = self._attr_color_temp_kelvin or KELVIN_MIN
+            await self._client.set_white(temp, brightness)
+        else:
+            color = self._attr_rgb_color or (255, 255, 255)
+            await self._client.set_color(color, brightness)
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
