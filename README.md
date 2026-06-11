@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="./docs/logo@2x.png" width="120" />
+    <img src="./custom_components/dohome_rgb/brand/icon@2x.png" width="120" />
     <h3 align="center">DoHome</h3>
     <p align="center">Home Assistant integration</p>
     <p align="center">
