@@ -1,9 +1,5 @@
 # DoHome
 
-[![Release](https://github.com/JampireX/dohome_rgb/actions/workflows/release.yml/badge.svg)](https://github.com/JampireX/dohome_rgb/actions/workflows/release.yml)
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![Release version](https://img.shields.io/github/v/release/JampireX/dohome_rgb?sort=semver)](https://github.com/JampireX/dohome_rgb/releases)
-
 Local control of **DoHome** Wi-Fi lights (RGBW / white bulbs and LED strips) in
 Home Assistant — no cloud or app required.
 
