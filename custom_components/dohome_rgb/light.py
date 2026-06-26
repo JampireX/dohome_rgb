@@ -48,6 +48,14 @@ EFFECTS: dict[str, Effect] = {_effect_name(effect.name): effect for effect in Ef
 EFFECT_OFF = "None"
 _EFFECT_LIST = [EFFECT_OFF, *EFFECTS]
 
+# Errors raised while talking to the device. Besides connection problems
+# (timeout / socket / protocol), the dohome-api parsing helpers raise plain
+# ValueError/KeyError on a malformed or out-of-range response (json decode,
+# parse_doit_light_state, kelvin_to_dowhite, apply_brightness, ...). The config
+# flow already narrows to the same set; the entity must too, otherwise a single
+# garbled poll bubbles an uncaught exception out of async_update every cycle.
+_DEVICE_ERRORS = (asyncio.TimeoutError, DoHomeException, OSError, ValueError, KeyError)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -101,10 +109,19 @@ class DoHomeLightEntity(LightEntity):
     async def _update_state(self) -> None:
         try:
             state = await self._client.get_state()
-        except (asyncio.TimeoutError, DoHomeException, OSError):
+        except _DEVICE_ERRORS:
             self._attr_available = False
             return
         self._attr_available = True
+
+        # While a hardware effect is running the device cannot report a
+        # meaningful on/off state: effect frames pass through all-zero RGBW,
+        # which the library decodes as is_on=False. Keep the optimistic state
+        # instead of letting a poll flip the light "off" mid-effect.
+        if self._state_known and self._attr_effect != EFFECT_OFF:
+            self._attr_is_on = True
+            return
+
         self._attr_is_on = state["is_on"]
         if not state["is_on"]:
             return
@@ -131,31 +148,17 @@ class DoHomeLightEntity(LightEntity):
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the light on."""
-        if ATTR_EFFECT in kwargs:
-            effect = kwargs[ATTR_EFFECT]
-            try:
-                if effect == EFFECT_OFF:
-                    # Stop the running effect by re-applying a static state.
-                    await self._async_apply_color()
-                else:
-                    await self._client.set_effect(EFFECTS[effect])
-            except (asyncio.TimeoutError, DoHomeException, OSError):
-                self._attr_available = False
-                return
-            self._state_known = True
-            self._attr_effect = effect
-            self._attr_is_on = True
-            return
-
+        effect = kwargs.get(ATTR_EFFECT)
         has_explicit_state = (
             ATTR_BRIGHTNESS in kwargs
             or ATTR_RGB_COLOR in kwargs
             or ATTR_COLOR_TEMP_KELVIN in kwargs
         )
 
+        # Apply an explicit colour/brightness/temperature first so that it is
+        # not dropped when an effect is requested in the same service call. A
+        # manual colour change also exits effect mode.
         if has_explicit_state:
-            self._state_known = True
-            # A manual colour/brightness change exits effect mode.
             self._attr_effect = EFFECT_OFF
             if ATTR_BRIGHTNESS in kwargs:
                 self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
@@ -167,13 +170,27 @@ class DoHomeLightEntity(LightEntity):
                 self._attr_color_temp_kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
 
         try:
-            if not self._state_known:
-                await self._client.set_power(True)
-            else:
+            if effect is not None and effect != EFFECT_OFF:
+                await self._client.set_effect(EFFECTS[effect])
+                self._attr_effect = effect
+                self._state_known = True
+            elif effect == EFFECT_OFF:
+                # Stop a running effect by re-applying the static state (which
+                # now reflects any colour passed alongside the "None" effect).
+                self._attr_effect = EFFECT_OFF
                 await self._async_apply_color()
-        except (asyncio.TimeoutError, DoHomeException, OSError):
+                self._state_known = True
+            elif self._state_known or has_explicit_state:
+                await self._async_apply_color()
+                self._state_known = True
+            else:
+                # State not seeded yet and nothing explicit requested: power on
+                # and let the next poll read the real colour/brightness.
+                await self._client.set_power(True)
+        except _DEVICE_ERRORS:
             self._attr_available = False
             return
+        self._attr_available = True
         self._attr_is_on = True
 
     async def _async_apply_color(self) -> None:
@@ -195,6 +212,8 @@ class DoHomeLightEntity(LightEntity):
         """Turn the light off."""
         try:
             await self._client.set_power(False)
-            self._attr_is_on = False
-        except (asyncio.TimeoutError, DoHomeException, OSError):
+        except _DEVICE_ERRORS:
             self._attr_available = False
+            return
+        self._attr_available = True
+        self._attr_is_on = False

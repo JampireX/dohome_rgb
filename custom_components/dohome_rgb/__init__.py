@@ -59,6 +59,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data[_DISCOVERY_STARTED] = True
 
     async def _async_discover(_now=None) -> None:
+        # The component is never torn down once loaded, so the timer below
+        # outlives every config entry. Skip the scan (and the flow creation it
+        # triggers) while no entry exists; it resumes automatically once a
+        # device is configured again.
+        if not hass.config_entries.async_entries(DOMAIN):
+            return
         try:
             devices = await async_discover_devices()
         except Exception:  # noqa: BLE001 - discovery must never break HA
