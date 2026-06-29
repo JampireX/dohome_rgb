@@ -20,9 +20,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v${{ steps.ver.outputs.version }}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          TAG="v$VERSION"
+          # Mark PEP 440 pre-release versions (e.g. 1.3.5b1, 2.0.0rc1, 1.4.0a2)
+          # as GitHub pre-releases so HACS only offers them to users who have
+          # opted into beta versions.
+          PRERELEASE=""
+          if echo "$VERSION" | grep -qiE '(a|b|rc)[0-9]+$'; then
+            PRERELEASE="--prerelease"
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists — skipping."
           else
-            gh release create "$TAG" --title "$TAG" --generate-notes --target "$GITHUB_SHA"
+            gh release create "$TAG" $PRERELEASE --title "$TAG" --generate-notes --target "$GITHUB_SHA"
           fi
