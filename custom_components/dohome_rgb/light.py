@@ -1,6 +1,7 @@
 """Support for DoHome RGB Lights"""
 
 import asyncio
+from collections.abc import Coroutine
 from datetime import timedelta
 from typing import Any, override
 
@@ -147,8 +148,25 @@ class DoHomeLightEntity(LightEntity):
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the light on."""
-        effect = kwargs.get(ATTR_EFFECT)
+        """Turn the light on.
+
+        The new state is written to Home Assistant optimistically (before the
+        network round-trip) so the UI reacts instantly; a failed send then
+        marks the entity unavailable.
+        """
+        if ATTR_EFFECT in kwargs:
+            effect = kwargs[ATTR_EFFECT]
+            self._state_known = True
+            self._attr_effect = effect
+            self._attr_is_on = True
+            self.async_write_ha_state()
+            if effect == EFFECT_OFF:
+                # Stop the running effect by re-applying a static state.
+                await self._async_send(self._async_apply_color())
+            else:
+                await self._async_send(self._client.set_effect(EFFECTS[effect]))
+            return
+
         has_explicit_state = (
             ATTR_BRIGHTNESS in kwargs
             or ATTR_RGB_COLOR in kwargs
@@ -169,29 +187,24 @@ class DoHomeLightEntity(LightEntity):
                 self._attr_color_mode = ColorMode.COLOR_TEMP
                 self._attr_color_temp_kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
 
+        if has_explicit_state:
+            self._state_known = True
+        self._attr_is_on = True
+        self.async_write_ha_state()
+
+        if not self._state_known:
+            await self._async_send(self._client.set_power(True))
+        else:
+            await self._async_send(self._async_apply_color())
+
+    async def _async_send(self, request: Coroutine[Any, Any, None]) -> None:
+        """Await a device command, tracking availability from the outcome."""
         try:
-            if effect is not None and effect != EFFECT_OFF:
-                await self._client.set_effect(EFFECTS[effect])
-                self._attr_effect = effect
-                self._state_known = True
-            elif effect == EFFECT_OFF:
-                # Stop a running effect by re-applying the static state (which
-                # now reflects any colour passed alongside the "None" effect).
-                self._attr_effect = EFFECT_OFF
-                await self._async_apply_color()
-                self._state_known = True
-            elif self._state_known or has_explicit_state:
-                await self._async_apply_color()
-                self._state_known = True
-            else:
-                # State not seeded yet and nothing explicit requested: power on
-                # and let the next poll read the real colour/brightness.
-                await self._client.set_power(True)
+            await request
+            self._attr_available = True
         except _DEVICE_ERRORS:
             self._attr_available = False
-            return
-        self._attr_available = True
-        self._attr_is_on = True
+        self.async_write_ha_state()
 
     async def _async_apply_color(self) -> None:
         """Send the current static colour/temperature to the device.
@@ -210,10 +223,6 @@ class DoHomeLightEntity(LightEntity):
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
-        try:
-            await self._client.set_power(False)
-        except _DEVICE_ERRORS:
-            self._attr_available = False
-            return
-        self._attr_available = True
         self._attr_is_on = False
+        self.async_write_ha_state()
+        await self._async_send(self._client.set_power(False))

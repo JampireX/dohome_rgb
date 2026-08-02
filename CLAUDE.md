@@ -78,13 +78,25 @@ coupled through `entry.runtime_data` and the `dohome-api` types.
   - All `dohome-api` calls are wrapped to catch `(asyncio.TimeoutError, DoHomeException,
     OSError)` and flip `_attr_available = False` for connection resilience.
 
+- **`transport.py`** — `PersistentTCPStream`, a custom `APITransport` that replaces the
+  library's per-request `TCPStream`. It keeps one TCP connection open per device (opened
+  lazily, closed on entry unload), serializes all requests through an `asyncio.Lock` (the
+  ESP8266 handles concurrent connections poorly — this also stops polls from competing with
+  commands), detects dropped connections (timeout / socket error / peer EOF) and reconnects
+  on the next attempt, and uses short timeouts (1 s connect, 1.5 s request, 2 attempts)
+  instead of the library's 13.5 s worst case. A response is complete when the accumulated
+  bytes parse as JSON; any timeout closes the connection so a late reply can't be misread
+  as the answer to the next request.
+
 - **`constants.py`** — `DOMAIN` and the `CONF_*` keys used as config-entry data keys.
 
 ### Cross-cutting notes
 
 - The integration is **polling** (`light.py` sets `SCAN_INTERVAL = 10s` with the default
   `should_poll`); `manifest.json` declares `iot_class: local_polling` to match. `dohome-api`
-  has no push/subscribe mechanism — each request opens a fresh TCP connection.
+  has no push/subscribe mechanism. `turn_on`/`turn_off` write the new state to HA
+  **optimistically** (`async_write_ha_state` before the network round-trip) so the UI reacts
+  instantly; a failed send flips availability afterwards.
 - The `dohome-api` version is pinned identically in **both** `pyproject.toml` and
   `manifest.json` `requirements`; update both together.
 - `homeassistant` is floored at the latest release (`>=2026.6.2`) in `pyproject.toml`; the

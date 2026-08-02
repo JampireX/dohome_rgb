@@ -5,7 +5,7 @@ authors = [
 ]
 description = "DoHome lights Home Assistant integration"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.14.2"
 keywords = ["home-assistant", "dohome"]
 license = {text = "MIT"}
 classifiers = [

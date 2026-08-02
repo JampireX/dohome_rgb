@@ -50,7 +50,9 @@ def _broadcast_targets() -> list[str]:
     targets: list[str] = ["255.255.255.255"]
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            ip = info[4][0]
+            # getaddrinfo's sockaddr is a union type; for AF_INET the first
+            # element is always the address string.
+            ip = str(info[4][0])
             if ip.startswith(("127.", "169.254.")):
                 continue
             bcast = ".".join(ip.split(".")[:3] + ["255"])

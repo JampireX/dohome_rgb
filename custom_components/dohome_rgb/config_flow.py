@@ -201,7 +201,8 @@ class DoHomeConfigFlow(ConfigFlow, domain=DOMAIN):
             data={CONF_HOST: self._discovery.host, CONF_INFO: info},
         )
 
-    @override
+    # No @override: the base ConfigFlow has no async_step_reconfigure — HA
+    # dispatches reconfigure flows to this method by name (hasattr check).
     async def async_step_reconfigure(
         self, user_input: dict[str, str] | None = None
     ) -> ConfigFlowResult:
@@ -212,8 +213,7 @@ class DoHomeConfigFlow(ConfigFlow, domain=DOMAIN):
         so changing the host there was silently ignored.
         """
         errors: dict[str, str] = {}
-        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        assert entry is not None
+        entry = self._get_reconfigure_entry()
 
         if user_input is not None:
             hostname = user_input[CONF_HOST]

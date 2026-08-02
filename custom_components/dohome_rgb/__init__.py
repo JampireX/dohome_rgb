@@ -6,7 +6,6 @@ from logging import getLogger
 
 import homeassistant.helpers.config_validation as cv
 from dohome.api import APIClient
-from dohome.transport import TCPStream
 from dohome.types.device import DeviceInfo as APIDeviceInfo
 from dohome.types.device import parse_doit_device_info
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
@@ -18,6 +17,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .constants import CONF_HOST, CONF_INFO, CONF_NAME, CONF_UNIQUE_ID, DOMAIN
 from .discovery import async_discover_devices
+from .transport import PersistentTCPStream
 
 _LOGGER = getLogger(__name__)
 
@@ -37,6 +37,7 @@ class DoHomeRuntimeData:
 
     client: APIClient
     info: APIDeviceInfo
+    transport: PersistentTCPStream
 
 
 # Typed config entry: lets platforms read `entry.runtime_data` with full typing
@@ -109,11 +110,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: DoHomeConfigEntry) -> bo
     """Set up DoHome RGB from a config entry."""
     assert entry.unique_id is not None
 
-    # TCPStream/APIClient constructors perform no I/O (the socket is opened
-    # per-request), so the client is safe to build once and reuse for the
-    # entry's lifetime instead of recreating it inside the light platform.
-    client = APIClient(TCPStream(entry.data[CONF_HOST]))
-    entry.runtime_data = DoHomeRuntimeData(client=client, info=entry.data[CONF_INFO])
+    # The transport keeps one TCP connection open for the entry's lifetime
+    # (opened lazily on first request, reconnected on failure); constructors
+    # perform no I/O, so the client is safe to build here and share.
+    transport = PersistentTCPStream(entry.data[CONF_HOST])
+    entry.runtime_data = DoHomeRuntimeData(
+        client=APIClient(transport),
+        info=entry.data[CONF_INFO],
+        transport=transport,
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -122,6 +127,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: DoHomeConfigEntry) -> bo
 
 async def async_unload_entry(hass: HomeAssistant, entry: DoHomeConfigEntry) -> bool:
     """Unload a config entry."""
-    # runtime_data is released together with the entry, so unloading the
-    # platforms is the only cleanup required (no manual hass.data teardown).
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        # Release the persistent TCP connection held by the transport.
+        await entry.runtime_data.transport.close()
+    return unload_ok
