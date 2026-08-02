@@ -187,15 +187,18 @@ class DoHomeLightEntity(LightEntity):
                 self._attr_color_mode = ColorMode.COLOR_TEMP
                 self._attr_color_temp_kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
 
-        if has_explicit_state:
-            self._state_known = True
+        self._state_known = True
         self._attr_is_on = True
         self.async_write_ha_state()
 
-        if not self._state_known:
-            await self._async_send(self._client.set_power(True))
-        else:
-            await self._async_send(self._async_apply_color())
+        # Any non-effect turn-on applies a static colour/temperature, which
+        # also stops a running hardware effect. When the state is not known
+        # yet this lights the bulb at a safe default (warm white at full
+        # brightness, resolved inside _async_apply_color) instead of the old
+        # set_power(True): that sent all-zero channels, leaving some bulbs
+        # powered but dark — and indistinguishable from off, since the device
+        # derives on/off purely from non-zero channels.
+        await self._async_send(self._async_apply_color())
 
     async def _async_send(self, request: Coroutine[Any, Any, None]) -> None:
         """Await a device command, tracking availability from the outcome."""
@@ -210,19 +213,29 @@ class DoHomeLightEntity(LightEntity):
         """Send the current static colour/temperature to the device.
 
         Also used to stop a running hardware effect (the effect ends as soon as
-        a normal state is written).
+        a normal state is written). Resolved fallbacks (used when the state is
+        not yet known) are written back to the entity attributes so Home
+        Assistant reports the same values it just sent to the bulb.
         """
         brightness = self._attr_brightness or 255
         if self._attr_color_mode == ColorMode.COLOR_TEMP:
             temp = self._attr_color_temp_kelvin or KELVIN_MIN
             await self._client.set_white(temp, brightness)
+            self._attr_color_temp_kelvin = temp
         else:
             color = self._attr_rgb_color or (255, 255, 255)
             await self._client.set_color(color, brightness)
+            self._attr_rgb_color = color
+        self._attr_brightness = brightness
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
         self._attr_is_on = False
+        # Powering off stops any running hardware effect, so clear the tracked
+        # effect. Otherwise the effect-preservation guard in _update_state would
+        # force is_on back to True on the next poll, making the light impossible
+        # to turn off from Home Assistant.
+        self._attr_effect = EFFECT_OFF
         self.async_write_ha_state()
         await self._async_send(self._client.set_power(False))
